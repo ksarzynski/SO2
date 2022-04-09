@@ -1,192 +1,129 @@
-#include <ncurses.h>
+#include <GL/glut.h>
 #include <thread>
 #include <chrono>
-#include <stdlib.h>
-#include <time.h>
-#include <stdio.h>
-#include <vector>
 
-static int PANEL_X = 4;
-static const int PANEL_SLEEP = 50;
-static bool END = false;
-static const int MAIN_WINDOW_X = 2;
-static const int MAIN_WINDOW_Y = 2;
+// CONSTANTS //
+const std::chrono::milliseconds SLEEP_TIME
+	= std::chrono::milliseconds { 50 };
+	// WINDOW //
+const int WINDOW_WIDTH = 400;
+const int WINDOW_HEIGHT = 300;
+const int WINDOW_X = 100;
+const int WINDOW_Y = 100;
+const char* WINDOW_TITLE = "SO2 projekt etap 1";
+	// ------ //
+	// PANEL //
+const int PANEL_RED = 255;
+const int PANEL_GREEN = 0;
+const int PANEL_BLUE = 0;
+const GLint panelMaxSpeed = 10;
+	// ----- //
+// --------- //
 
-struct Point{
-	int x, y;
-};
+// GLOBAL VARIABLES //
+std::thread panelThread;
+bool gameOver = false;
+	// PANEL //
+GLint panelX1 = 100;
+GLint panelY1 = 200;
+GLint panelX2 = 200;
+GLint panelY2 = 250;
+GLint panelSpeed = 5;
+bool panelGoesRight = true;
+	// ----- //
+// ---------------- //
 
-static const int BALLS = 6;
-static Point balls[BALLS];
-static std::vector<std::thread> threads;
+// FUNCTIONS //
+void clear() { glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); }
 
-Point initBall(){
-	Point ball;
-	ball.x = 4 + rand() % (COLS / 2) + COLS / 4;
-	ball.y = 4;
-	return ball;
-};
-
-void printBall(Point ball) {
-	attron(COLOR_PAIR(1));
-	mvprintw(ball.y - 1, ball.x, "*");
-	mvprintw(ball.y, ball.x - 1, "***");
-	mvprintw(ball.y + 1, ball.x, "*");
-	attroff(COLOR_PAIR(1));
-	refresh();
+	// INIT //
+void initGlut(int argc, char** argv) {
+	glutInit(&argc, argv);
+   	glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB);
 }
 
-void moveBall(int id) {
-	while(not END) {
-		balls[id] = initBall();
-		int velocity = 100;
-		std::pair<int, int> direction{0,0};
-		direction.first = rand() % 3 + 1;
-		direction.second = rand() % 7 - 3;
-		int bounce = 10 + rand() % 3;
-		while(not END and bounce >= 0) {
-			int y, x;
-			y = balls[id].y + direction.first;
-			x = balls[id].x + direction.second;
-			if(y > LINES - 9) {
-				if(bounce == 0)
-					break;
-				else {
-					if(x < PANEL_X or x > PANEL_X + 25)
-						break;
-					bounce--;
-					y = 2 * (LINES - 8) - y;
-					direction.first = -direction.first;
-				}
-			}
-			else if(y < 4) {
-				if(bounce == 0)
-					break;
-				else {
-					bounce--;
-					y = 8 - y;
-					direction.first = -direction.first;
-				}
-			}
-			if(x < 4) {
-				if(bounce == 0)
-					break;
-				else {
-					bounce--;
-					x = 8 - x;
-					direction.second = -direction.second;
-				}
-			}
-			if(x > COLS - 5) {
-				if(bounce == 0)
-					break;
-				else {
-					bounce--;
-					x = 2 * (COLS - 5) - x;
-					direction.second = -direction.second;
-				}
-			}
-			balls[id].x = x;
-			balls[id].y = y;
-			std::this_thread::sleep_for(std::chrono::milliseconds(velocity));
-		}
-	}
+void initWindow() {
+	glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+	glutInitWindowPosition(WINDOW_X, WINDOW_Y);
+	glutCreateWindow(WINDOW_TITLE);
 }
 
-void moveWindow(WINDOW* window, int startX) {
-	wborder(window, ' ', ' ', ' ',' ',' ',' ',' ',' ');
-	wrefresh(window);
-	mvwin(window, LINES - 7, startX);
-	box(window, 0, 0);
-	wrefresh(window);
+void initRestOfGlut() {
+	glClearColor(0, 0, 0, 0);
+	glDisable(GL_DEPTH_TEST);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0.0, WINDOW_WIDTH - 1, WINDOW_HEIGHT - 1, 0, -1.0, 1.0);
+	glMatrixMode(GL_MODELVIEW);
 }
 
-WINDOW* createNewWindow(int height, int width, int startY, int startX) {
-	WINDOW* localWindow;
-	localWindow = newwin(height, width, startY, startX);
-	box(localWindow, 0 , 0);
-	wrefresh(localWindow);
-	return localWindow;
+void init(int argc, char** argv) {
+	initGlut(argc, argv);
+	initWindow();
+	initRestOfGlut();
 }
+	// ---- //
 
-void clearScreen() {
-	for(int row = 3; row <= LINES - 8; row++){
-		move(row, 3);
-		for(int col = 3; col <= COLS - 4; col++)
-			addch(' ');
-	}
-}
-
-void panelMovement() {
-	bool direction = true;
-	while(not END) {
-		if(direction) {
-			if(PANEL_X < COLS - 4 - 25)
-				PANEL_X++;
-			else {
-				direction = not direction;
-				PANEL_X--;
+	// PANEL //
+void movePanel() {
+	while(!gameOver) {
+		GLint newPanelX1 = panelX1;
+		GLint newPanelX2 = panelX2;
+		if(panelGoesRight) {
+			newPanelX1 += panelSpeed;
+			newPanelX2 += panelSpeed;
+			if(newPanelX2 > WINDOW_WIDTH) {
+				panelGoesRight = !panelGoesRight;
+				newPanelX1 -= panelSpeed;
+				newPanelX2 -= panelSpeed;
 			}
 		}
 		else {
-			if(PANEL_X > 6)
-				PANEL_X--;
-			else {
-				direction = not direction;
-				PANEL_X++;
+			newPanelX1 -= panelSpeed;
+			newPanelX2 -= panelSpeed;
+			if(newPanelX1 < 0) {
+				panelGoesRight = !panelGoesRight;
+				newPanelX1 += panelSpeed;
+				newPanelX2 += panelSpeed;
 			}
 		}
-		std::this_thread::sleep_for(
-			std::chrono::milliseconds(PANEL_SLEEP));
+		panelX1 = newPanelX1;
+		panelX2 = newPanelX2;
+		glutPostRedisplay();
+		std::this_thread::sleep_for(SLEEP_TIME);
 	}
 }
 
-void printAll() {
-	WINDOW* mainWindow;
-	WINDOW* panel;
-	int startX, startY, width, height;
-	int ch;
-	initscr();
-	cbreak();
-	keypad(stdscr, TRUE);
-	noecho();
-	start_color();
-	init_pair(1, COLOR_BLUE, COLOR_RED);
-	timeout(20);
-	height = LINES - 4;
-	width = COLS - 4;
-	startY = 2;
-	startX = 2;
-	refresh();
-	mainWindow = createNewWindow(
-		height,
-		width,
-		MAIN_WINDOW_Y,
-		MAIN_WINDOW_X);
-	panel = createNewWindow(3, 25, LINES - 7, PANEL_X);
-	std::thread panelThread(panelMovement);
-	for(int i = 0; i < BALLS; i++)
-		threads.push_back(std::thread(moveBall, i));
-	while((ch = getch()) != KEY_F(2)) {
-		clearScreen();
-		moveWindow(panel, PANEL_X);
-		wrefresh(panel);
-		for(int i = 0; i < BALLS; i++) {
-			printBall(balls[i]);
-			refresh();
-		}
-	}
-	END = true;
-	for(int i = 0; i < BALLS; i++)
-		threads[i].join();
-	panelThread.join();
-	delwin(mainWindow);
-	delwin(panel);
+void drawAll() {
+		// PANEL //
+	clear();
+	glLoadIdentity();
+	glBegin(GL_QUADS);
+	glColor3ub(PANEL_RED, PANEL_GREEN, PANEL_BLUE);
+	glVertex2i(panelX1, panelY1);
+	glVertex2i(panelX2, panelY1);
+	glVertex2i(panelX2, panelY2);
+	glVertex2i(panelX1, panelY2);
+	glEnd();
+	glutSwapBuffers();
+		// ----- //
 }
+	// ----- //
 
-int main(int argc, char *argv[]) {
-	srand(time(NULL));
-	printAll();
-	endwin();
+void checkIfGameOver(unsigned char key, int x, int y) {
+	if(key == 27) {
+		panelThread.join();
+		gameOver = true;
+		exit(0);
+	}
+}
+// -------- //
+
+int main (int argc, char** argv) {
+	init(argc, argv);
+	panelThread = std::thread(movePanel);
+	glutDisplayFunc(drawAll);
+	glutKeyboardFunc(checkIfGameOver);
+	glutMainLoop();
 	return 0;
 }
