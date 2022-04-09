@@ -21,6 +21,7 @@ const GLint panelMaxSpeed = 10;
 // --------- //
 
 // GLOBAL VARIABLES //
+std::thread panelThread;
 bool gameOver = false;
 	// PANEL //
 GLint panelX1 = 100;
@@ -38,7 +39,7 @@ void clear() { glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); }
 	// INIT //
 void initGlut(int argc, char** argv) {
 	glutInit(&argc, argv);
-   	glutInitDisplayMode(GLUT_SINGLE|GLUT_RGB);
+   	glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB);
 }
 
 void initWindow() {
@@ -88,6 +89,7 @@ void movePanel() {
 		}
 		panelX1 = newPanelX1;
 		panelX2 = newPanelX2;
+		glutPostRedisplay();
 		std::this_thread::sleep_for(SLEEP_TIME);
 	}
 }
@@ -103,13 +105,14 @@ void drawAll() {
 	glVertex2i(panelX2, panelY2);
 	glVertex2i(panelX1, panelY2);
 	glEnd();
-	glFlush();
+	glutSwapBuffers();
 		// ----- //
 }
 	// ----- //
 
 void checkIfGameOver(unsigned char key, int x, int y) {
 	if(key == 27) {
+		panelThread.join();
 		gameOver = true;
 		exit(0);
 	}
@@ -118,9 +121,8 @@ void checkIfGameOver(unsigned char key, int x, int y) {
 
 int main (int argc, char** argv) {
 	init(argc, argv);
-	std::thread panelThread(movePanel);
-	while(!gameOver)
-		glutDisplayFunc(drawAll);
+	panelThread = std::thread(movePanel);
+	glutDisplayFunc(drawAll);
 	glutKeyboardFunc(checkIfGameOver);
 	glutMainLoop();
 	return 0;
