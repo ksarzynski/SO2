@@ -62,6 +62,7 @@ void init(int argc, char** argv) {
 	initRestOfGlut();
 }
 	// ---- //
+
 	// PANEL //
 void movePanel() {
 	GLint newPanelX1 = panelX1;
@@ -102,12 +103,20 @@ void drawPanel() {
 void drawAll() {
 	glutDisplayFunc(drawPanel);
 }
+
+void checkIfGameOver(unsigned char key, int x, int y) {
+	if(key == 27) {
+		gameOver = true;
+		exit(0);
+	}
+}
 // -------- //
 
 int main (int argc, char** argv) {
 	init(argc, argv);
 	std::thread panelThread(movePanel);
 	std::thread drawingThread(drawAll);
+	glutKeyboardFunc(checkIfGameOver);
 	glutMainLoop();
 	return 0;
 }
