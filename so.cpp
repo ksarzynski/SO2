@@ -65,14 +65,16 @@ void init(int argc, char** argv) {
 
 	// PANEL //
 void movePanel() {
-	GLint newPanelX1 = panelX1;
-	GLint newPanelX2 = panelX2;
 	while(!gameOver) {
+		GLint newPanelX1 = panelX1;
+		GLint newPanelX2 = panelX2;
 		if(panelGoesRight) {
 			newPanelX1 += panelSpeed;
 			newPanelX2 += panelSpeed;
 			if(newPanelX2 > WINDOW_WIDTH) {
 				panelGoesRight = !panelGoesRight;
+				newPanelX1 -= panelSpeed;
+				newPanelX2 -= panelSpeed;
 			}
 		}
 		else {
@@ -80,8 +82,12 @@ void movePanel() {
 			newPanelX2 -= panelSpeed;
 			if(newPanelX1 < 0) {
 				panelGoesRight = !panelGoesRight;
+				newPanelX1 += panelSpeed;
+				newPanelX2 += panelSpeed;
 			}
 		}
+		panelX1 = newPanelX1;
+		panelX2 = newPanelX2;
 		std::this_thread::sleep_for(SLEEP_TIME);
 	}
 }
