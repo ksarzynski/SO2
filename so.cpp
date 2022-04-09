@@ -4,7 +4,7 @@
 
 // CONSTANTS //
 const std::chrono::milliseconds SLEEP_TIME
-	= std::chrono::milliseconds { 500 };
+	= std::chrono::milliseconds { 50 };
 	// WINDOW //
 const int WINDOW_WIDTH = 400;
 const int WINDOW_HEIGHT = 300;
@@ -92,7 +92,8 @@ void movePanel() {
 	}
 }
 
-void drawPanel() {
+void drawAll() {
+		// PANEL //
 	clear();
 	glLoadIdentity();
 	glBegin(GL_QUADS);
@@ -103,12 +104,9 @@ void drawPanel() {
 	glVertex2i(panelX1, panelY2);
 	glEnd();
 	glFlush();
+		// ----- //
 }
 	// ----- //
-
-void drawAll() {
-	glutDisplayFunc(drawPanel);
-}
 
 void checkIfGameOver(unsigned char key, int x, int y) {
 	if(key == 27) {
@@ -121,7 +119,8 @@ void checkIfGameOver(unsigned char key, int x, int y) {
 int main (int argc, char** argv) {
 	init(argc, argv);
 	std::thread panelThread(movePanel);
-	std::thread drawingThread(drawAll);
+	while(!gameOver)
+		glutDisplayFunc(drawAll);
 	glutKeyboardFunc(checkIfGameOver);
 	glutMainLoop();
 	return 0;
