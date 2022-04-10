@@ -4,6 +4,8 @@
 #include <vector>
 #include <cstdlib>
 #include <time.h>
+#include <algorithm>
+#include <math.h>
 
 const std::chrono::milliseconds SLEEP_TIME
 	= std::chrono::milliseconds { 50 };
@@ -24,6 +26,7 @@ const GLint BALL_MAX_SPEED = 20;
 const int BOUNCES = 6;
 std::thread panelThread;
 std::thread redisplayThread;
+std::thread ballThrowerThread;
 std::vector<std::thread> ballsThreads;
 bool gameOver = false;
 GLint panelX1 = 100;
@@ -32,15 +35,16 @@ GLint panelX2 = 200;
 GLint panelY2 = 250;
 GLint panelSpeed = 5;
 bool panelGoesRight = true;
+int ballCount = 0;
 
 class Ball {
 
 public:
 	const int bounces = BOUNCES;
-	static int id;
-	GLint ballX;
-	GLint ballY;
-	GLint radius;
+	int id;
+	float ballX;
+	float ballY;
+	float radius;
 	int ballRed;
 	int ballGreen;
 	int ballBlue;
@@ -48,7 +52,8 @@ public:
 	GLint horizontalSpeed;
 
 	Ball() {
-		id++;
+		ballCount++;
+		id = ballCount;
 		ballX = 100;
 		ballY = 0;
 		radius = 3;
@@ -80,6 +85,7 @@ void checkIfGameOver(unsigned char key, int x, int y) {
 		gameOver = true;
 		panelThread.join();
 		redisplayThread.join();
+		ballThrowerThread.join();
 		exit(0);
 	}
 }
@@ -87,6 +93,24 @@ void checkIfGameOver(unsigned char key, int x, int y) {
 void redisplayFunc() {
 	while(!gameOver)
 		glutPostRedisplay();
+}
+
+void drawBall(Ball* ball) {
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	glTranslatef(ball->ballX, ball->ballY, 0.0f);
+	int circlePoints = 100;
+	float angle = 2.0f * 3.14f / circlePoints;
+	glBegin(GL_POLYGON);
+	double currentAngle = 0.0;
+	glVertex2d(ball->radius * std::cos(0.0), ball->radius * std::sin(0.0));
+	for(int i = 0; i < circlePoints; i++) {
+		glVertex2d(ball->radius * std::cos(currentAngle), ball->radius * std::sin(currentAngle));
+		currentAngle += angle;
+	}
+	glEnd();
+	glPopMatrix();
 }
 
 void drawAll() {
@@ -99,6 +123,8 @@ void drawAll() {
 	glVertex2i(panelX2, panelY2);
 	glVertex2i(panelX1, panelY2);
 	glEnd();
+	for(int i = 0; i < ballCount; i++)
+		drawBall(balls[i]);
 	glutSwapBuffers();
 }
 
@@ -162,6 +188,9 @@ void initRestOfGlut() {
 
 void ballThrowerFunc() {
 	while(!gameOver) {
+		Ball* ball = new Ball();
+		balls.push_back(ball);
+		ballsThreads.push_back(std::thread(moveBall, ball));
 		std::this_thread::sleep_for(BALLS_COOLDOWN_TIME);
 	}
 }
@@ -169,6 +198,7 @@ void ballThrowerFunc() {
 void initThreads() {
 	panelThread = std::thread(movePanel);
 	redisplayThread = std::thread(redisplayFunc);
+	ballThrowerThread = std::thread(ballThrowerFunc);
 }
 
 void init(int argc, char** argv) {
