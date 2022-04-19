@@ -6,16 +6,18 @@
 #include <time.h>
 #include <algorithm>
 #include <math.h>
+#include <iostream>
 
 const std::chrono::milliseconds SLEEP_TIME
 	= std::chrono::milliseconds { 50 };
-const std::chrono::milliseconds BALLS_COOLDOWN_TIME
-	= std::chrono::milliseconds { 5000 };
+const int MIN_BALLS_COOLDOWN_TIME = 500;
+const int MAX_BALLS_COOLDOWN_TIME = 2000;
 const int WINDOW_WIDTH = 400;
 const int WINDOW_HEIGHT = 300;
 const int WINDOW_X = 100;
 const int WINDOW_Y = 100;
 const char* WINDOW_TITLE = "SO2 projekt etap 1";
+const int B_COLOR = 255;
 const int PANEL_RED = 255;
 const int PANEL_GREEN = 0;
 const int PANEL_BLUE = 0;
@@ -40,7 +42,7 @@ int ballCount = 0;
 class Ball {
 
 public:
-	const int bounces = BOUNCES;
+	int bounces = BOUNCES;
 	int id;
 	float ballX;
 	float ballY;
@@ -50,6 +52,7 @@ public:
 	int ballBlue;
 	GLint verticalSpeed;
 	GLint horizontalSpeed;
+	bool isDead;
 
 	Ball() {
 		ballCount++;
@@ -58,10 +61,16 @@ public:
 		ballY = 0;
 		radius = 3;
 		ballRed = ((10 * id) + id) % 255;
-		ballRed = ((10 * id) + id) % 255;
-		ballRed = ((10 * id) + id) % 255;
+		ballGreen = ((20 * id) + 2 * id) % 255;
+		ballBlue = ((30 * id) + 3 * id) % 255;
 		verticalSpeed = rand() % BALL_MAX_SPEED + BALL_MIN_SPEED;
 		horizontalSpeed = rand() % BALL_MAX_SPEED + BALL_MIN_SPEED;
+		int r = rand() % 4;
+		if(r == 0)
+			verticalSpeed = (-1) * verticalSpeed;
+		if(r == 1)
+			horizontalSpeed = (-1) * horizontalSpeed;
+		isDead = false;
 	}
 };
 
@@ -80,12 +89,26 @@ void initWindow() {
 	glutCreateWindow(WINDOW_TITLE);
 }
 
+void deleteBalls() {
+	std::this_thread::sleep_for(SLEEP_TIME);
+	for(int i = 0; i < balls.size(); i++) {
+		std::cout << "killing ball: " << balls[i]->id << "\n";
+		ballsThreads[i].join();
+		delete balls[i];
+	}
+}
+
+void endThreads() {
+	panelThread.join();
+	redisplayThread.join();
+	ballThrowerThread.join();
+}
+
 void checkIfGameOver(unsigned char key, int x, int y) {
 	if(key == 27) {
 		gameOver = true;
-		panelThread.join();
-		redisplayThread.join();
-		ballThrowerThread.join();
+		endThreads();
+		deleteBalls();
 		exit(0);
 	}
 }
@@ -103,6 +126,7 @@ void drawBall(Ball* ball) {
 	int circlePoints = 100;
 	float angle = 2.0f * 3.14f / circlePoints;
 	glBegin(GL_POLYGON);
+	glColor3ub(ball->ballRed, ball->ballGreen, ball->ballBlue);
 	double currentAngle = 0.0;
 	glVertex2d(ball->radius * std::cos(0.0), ball->radius * std::sin(0.0));
 	for(int i = 0; i < circlePoints; i++) {
@@ -113,18 +137,29 @@ void drawBall(Ball* ball) {
 	glPopMatrix();
 }
 
+void drawRectangle(int x1, int y1, int x2, int y2, int r, int g, int b) {
+	glBegin(GL_QUADS);
+	glColor3ub(r, g, b);
+	glVertex2i(x1, y1);
+	glVertex2i(x2, y1);
+	glVertex2i(x2, y2);
+	glVertex2i(x1, y2);
+	glEnd();
+}
+
 void drawAll() {
 	clear();
 	glLoadIdentity();
+	drawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT,
+			B_COLOR, B_COLOR, B_COLOR);
+	drawRectangle(panelX1, panelY1, panelX2, panelY2,
+			PANEL_RED, PANEL_GREEN, PANEL_BLUE);
 	glBegin(GL_QUADS);
 	glColor3ub(PANEL_RED, PANEL_GREEN, PANEL_BLUE);
-	glVertex2i(panelX1, panelY1);
-	glVertex2i(panelX2, panelY1);
-	glVertex2i(panelX2, panelY2);
-	glVertex2i(panelX1, panelY2);
-	glEnd();
-	for(int i = 0; i < ballCount; i++)
-		drawBall(balls[i]);
+	for(int i = 0; i < balls.size(); i++) {
+		if(!balls[i]->isDead)
+			drawBall(balls[i]);
+	}
 	glutSwapBuffers();
 }
 
@@ -158,21 +193,24 @@ void movePanel() {
 
 void moveBall(Ball* ball) {
 	while(!gameOver && ball->bounces) {
-		GLint newBallX = ball->ballX + ball->verticalSpeed;
-		GLint newBallY = ball->ballY + ball->horizontalSpeed;
-		if(newBallX + ball->radius > WINDOW_WIDTH ||
-			newBallX - ball->radius < 0) {
+		ball->ballX += ball->verticalSpeed;
+		ball->ballY += ball->horizontalSpeed;
+		if(ball->ballX + ball->radius > WINDOW_WIDTH ||
+			ball->ballX - ball->radius < 0) {
 			ball->verticalSpeed = (-1) * ball->verticalSpeed;
-			continue;
+			ball->bounces--;
+			std::cout << "Ball " << ball->id << " bounces: " << ball->bounces << "\n";
 		}
-		if(newBallY + ball->radius > WINDOW_HEIGHT ||
-			newBallY - ball->radius < 0) {
+		else if(ball->ballY + ball->radius > WINDOW_HEIGHT ||
+			ball->ballY - ball->radius < 0) {
 			ball->horizontalSpeed = (-1) * ball->horizontalSpeed;
-			continue;
+			ball->bounces--;
+			std::cout << "Ball " << ball->id << " bounces: " << ball->bounces << "\n";
 		}
-		ball->ballX = newBallX;
-		ball->ballY = newBallY;
+		std::this_thread::sleep_for(SLEEP_TIME);
 	}
+	std::cout << "End of bounces for ball: " << ball->id << "\n";
+	ball->isDead = true;
 }
 
 void initRestOfGlut() {
@@ -187,11 +225,15 @@ void initRestOfGlut() {
 }
 
 void ballThrowerFunc() {
+	int timeBreak = 0;
 	while(!gameOver) {
+		std::this_thread::sleep_for(
+			std::chrono::milliseconds { timeBreak });
+		std::cout << "New ball after: " << timeBreak << "\n";
 		Ball* ball = new Ball();
 		balls.push_back(ball);
 		ballsThreads.push_back(std::thread(moveBall, ball));
-		std::this_thread::sleep_for(BALLS_COOLDOWN_TIME);
+		timeBreak = rand() % MAX_BALLS_COOLDOWN_TIME + MIN_BALLS_COOLDOWN_TIME;
 	}
 }
 
