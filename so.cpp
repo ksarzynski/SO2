@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <math.h>
 #include <mutex>
+#include <functional>
 
 /*
 	1. Wektor zmieniony na liste
@@ -48,9 +49,7 @@ bool panelGoesRight = true;
 int ballCount = 0;
 std::mutex panelMutex;
 
-class Ball {
-
-public:
+struct Ball {
 	int id;
 	float ballX;
 	float ballY;
@@ -62,12 +61,9 @@ public:
 	GLint horizontalSpeed;
 	int bounces;
 	bool isDead;
-	Ball() {
+	Ball() : ballX{100}, ballY{0}, radius{3}, bounces{BOUNCES}, isDead{false} {
 		ballCount++;
 		id = ballCount;
-		ballX = 100;
-		ballY = 0;
-		radius = 3;
 		ballRed = ((10 * id) + 1 * id) % 255;
 		ballGreen = ((20 * id) + 2 * id) % 255;
 		ballBlue = ((30 * id) + 3 * id) % 255;
@@ -76,12 +72,10 @@ public:
 		int r = rand() % 2;
 		if(r == 0)
 			verticalSpeed = (-1) * verticalSpeed;
-		bounces = BOUNCES;
-		isDead = false;
 	}
 };
 
-std::vector<Ball*> balls;
+std::list<Ball> balls;
 
 void clear() { glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); }
 
@@ -101,8 +95,8 @@ void endThreads() {
 	redisplayThread.join();
 	ballThrowerThread.join();
 	std::list<std::thread>::iterator it;
-	for(it = ballsThreads.begin(); it != ballsThreads.end(); it++){
-		(*it).join();
+	for(auto& ballThread : ballsThreads){
+		ballThread.join();
 	}
 }
 
@@ -120,20 +114,20 @@ void redisplayFunc() {
 		glutPostRedisplay();
 }
 
-void drawBall(Ball* ball) {
-	if(!ball->isDead) {
+void drawBall(Ball& ball) {
+	if(!ball.isDead) {
 		glMatrixMode(GL_MODELVIEW);
 		glPushMatrix();
 		glLoadIdentity();
-		glTranslatef(ball->ballX, ball->ballY, 0.0f);
+		glTranslatef(ball.ballX, ball.ballY, 0.0f);
 		int circlePoints = 100;
 		float angle = 2.0f * 3.14f / circlePoints;
 		glBegin(GL_POLYGON);
-		glColor3ub(ball->ballRed, ball->ballGreen, ball->ballBlue);
+		glColor3ub(ball.ballRed, ball.ballGreen, ball.ballBlue);
 		double currentAngle = 0.0;
-		glVertex2d(ball->radius * std::cos(0.0), ball->radius * std::sin(0.0));
+		glVertex2d(ball.radius * std::cos(0.0), ball.radius * std::sin(0.0));
 		for(int i = 0; i < circlePoints; i++) {
-			glVertex2d(ball->radius * std::cos(currentAngle), ball->radius * std::sin(currentAngle));
+			glVertex2d(ball.radius * std::cos(currentAngle), ball.radius * std::sin(currentAngle));
 			currentAngle += angle;
 		}
 		glEnd();
@@ -156,8 +150,8 @@ void drawAll() {
 	glLoadIdentity();
 	drawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, B_R_COLOR, B_G_COLOR, B_B_COLOR);
 	drawRectangle(panelX1, panelY1, panelX2, panelY2, PANEL_RED, PANEL_GREEN, PANEL_BLUE);
-	for(int i = 0; i < ballCount; i++)
-		drawBall(balls[i]);
+	for(auto& ball : balls)
+		drawBall(ball);
 	glutSwapBuffers();
 }
 
@@ -193,31 +187,31 @@ void movePanel() {
 	}
 }
 
-void moveBall(Ball* ball) {
-	while(!gameOver && ball->bounces && !ball->isDead) {
-		GLint newBallX = ball->ballX + ball->verticalSpeed;
-		GLint newBallY = ball->ballY + ball->horizontalSpeed;
-		if(newBallX + ball->radius >= WINDOW_WIDTH ||
-			newBallX - ball->radius <= 0) {
-			ball->verticalSpeed = (-1) * ball->verticalSpeed;
-			ball->bounces--;
+void moveBall(Ball& ball) {
+	while(!gameOver && ball.bounces && !ball.isDead) {
+		GLint newBallX = ball.ballX + ball.verticalSpeed;
+		GLint newBallY = ball.ballY + ball.horizontalSpeed;
+		if(newBallX + ball.radius >= WINDOW_WIDTH ||
+			newBallX - ball.radius <= 0) {
+			ball.verticalSpeed = (-1) * ball.verticalSpeed;
+			ball.bounces--;
 		}
-		if(newBallY + ball->radius >= WINDOW_HEIGHT ||
-			newBallY - ball->radius <= 0) {
-			ball->horizontalSpeed = (-1) * ball->horizontalSpeed;
-			ball->bounces--;
+		if(newBallY + ball.radius >= WINDOW_HEIGHT ||
+			newBallY - ball.radius <= 0) {
+			ball.horizontalSpeed = (-1) * ball.horizontalSpeed;
+			ball.bounces--;
 		}
-		if(newBallX - ball->radius >= panelX1 && newBallX + ball->radius <= panelX2 &&
-			newBallY + ball->radius >= panelY1 && newBallY - ball->radius <= panelY2){
-			ball->verticalSpeed = (-1) * ball->verticalSpeed;
-			ball->horizontalSpeed = (-1) * ball->horizontalSpeed;
+		if(newBallX - ball.radius >= panelX1 && newBallX + ball.radius <= panelX2 &&
+			newBallY + ball.radius >= panelY1 && newBallY - ball.radius <= panelY2){
+			ball.verticalSpeed = (-1) * ball.verticalSpeed;
+			ball.horizontalSpeed = (-1) * ball.horizontalSpeed;
 			continue;
 		}
-		ball->ballX = newBallX;
-		ball->ballY = newBallY;
+		ball.ballX = newBallX;
+		ball.ballY = newBallY;
 		std::this_thread::sleep_for(SLEEP_TIME);
 	}
-	ball->isDead = true;
+	ball.isDead = true;
 }
 
 void initRestOfGlut() {
@@ -235,9 +229,8 @@ void ballThrowerFunc() {
 	int timeBreak = 0;
 	while(!gameOver) {
 		std::this_thread::sleep_for(std::chrono::milliseconds { timeBreak });
-		Ball* ball = new Ball();
-		balls.push_back(ball);
-		ballsThreads.push_back(std::thread(moveBall, ball));
+		balls.emplace_back();
+		ballsThreads.push_back(std::thread(moveBall, std::ref<Ball>(balls.back())));
 		timeBreak = rand() % MAX_BALLS_COOLDOWN_TIME + MIN_BALLS_COOLDOWN_TIME;
 	}
 }
