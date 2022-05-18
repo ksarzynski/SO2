@@ -10,6 +10,7 @@
 #include <math.h>
 #include <mutex>
 #include <functional>
+#include <iostream>
 
 /*
 	1. Wektor zmieniony na liste
@@ -201,8 +202,10 @@ void moveBall(Ball& ball) {
 			ball.horizontalSpeed = (-1) * ball.horizontalSpeed;
 			ball.bounces--;
 		}
-		if(newBallX - ball.radius >= panelX1 && newBallX + ball.radius <= panelX2 &&
-			newBallY + ball.radius >= panelY1 && newBallY - ball.radius <= panelY2){
+		if((newBallX - ball.radius >= panelX1 - panelGoesRight ? panelSpeed : 0) && (newBallX + ball.radius <= panelX2 + panelGoesRight ?  : panelSpeed) &&
+			(newBallY + ball.radius >= panelY1) && (newBallY - ball.radius <= panelY2))
+		{
+			// std::cout << newBallX << " " << newBallY << " " << panelX1 << " " << panelX2 << " " << panelY1 << " " << panelY2 << "\n";
 			ball.verticalSpeed = (-1) * ball.verticalSpeed;
 			ball.horizontalSpeed = (-1) * ball.horizontalSpeed;
 			continue;
