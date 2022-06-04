@@ -134,6 +134,7 @@ void drawBall(Ball& ball) {
 		glMatrixMode(GL_MODELVIEW);
 		glPushMatrix();
 		glLoadIdentity();
+		ball.mutex.lock();
 		glTranslatef(ball.ballX, ball.ballY, 0.0f);
 		int circlePoints = 100;
 		float angle = 2.0f * 3.14f / circlePoints;
@@ -145,6 +146,7 @@ void drawBall(Ball& ball) {
 			glVertex2d(ball.radius * std::cos(currentAngle), ball.radius * std::sin(currentAngle));
 			currentAngle += angle;
 		}
+		ball.mutex.unlock();
 		glEnd();
 		glPopMatrix();
 	}
@@ -164,7 +166,9 @@ void drawAll() {
 	clear();
 	glLoadIdentity();
 	drawRectangle(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, B_R_COLOR, B_G_COLOR, B_B_COLOR);
+	panelMutex.lock();
 	drawRectangle(panelX1, panelY1, panelX2, panelY2, PANEL_RED, PANEL_GREEN, PANEL_BLUE);
+	panelMutex.unlock();
 	for(auto& ball : balls)
 		drawBall(ball);
 	glutSwapBuffers();
@@ -172,7 +176,6 @@ void drawAll() {
 
 void movePanel() {
 	while(!gameOver) {
-		panelMutex.lock();
 		GLint newPanelX1 = panelX1;
 		GLint newPanelX2 = panelX2;
 		if(panelGoesRight) {
@@ -195,6 +198,7 @@ void movePanel() {
 				panelSpeed = rand() % PANEL_MAX_SPEED + PANEL_MIN_SPEED;
 			}
 		}
+		panelMutex.lock();
 		panelX1 = newPanelX1;
 		panelX2 = newPanelX2;
 		panelMutex.unlock();
@@ -217,7 +221,6 @@ std::optional<panelWalls> checkWhichWallBounce(Ball& ball, GLint newBallX, GLint
 
 void moveBall(Ball& ball) {
 	while(!gameOver && ball.bounces && !ball.isDead) {
-		ball.mutex.lock();
 		GLint newBallX = ball.ballX + ball.verticalSpeed;
 		GLint newBallY = ball.ballY + ball.horizontalSpeed;
 		if(newBallX - ball.radius < 0)
@@ -332,9 +335,8 @@ void moveBall(Ball& ball) {
 		{
 			ball.isInPanel = false;
 		}
-
-
-		panelLock.unlock();
+		panelLock.unlock();		
+		ball.mutex.lock();
 		ball.ballX = newBallX;
 		ball.ballY = newBallY;
 		ball.mutex.unlock();
