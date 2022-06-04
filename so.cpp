@@ -266,15 +266,12 @@ void moveBall(Ball& ball) {
 		{
 			if(not ball.isInPanel)
 			{
-				std::cout << "collision " << (panelGoThrough?"yes":"no") << std::endl;
 				if(not panelGoThrough)
 				{
 					panelGoThrough = true;
-					std::cout << "try to bounce" << std::endl;
 					auto wall = checkWhichWallBounce(ball, newBallX, newBallY);
 					if(wall)
 					{
-						std::cout << "bounce" << std::endl;
 						switch(*wall)
 						{
 							case panelWalls::top:
@@ -319,13 +316,11 @@ void moveBall(Ball& ball) {
 					else
 					{
 						ball.isDead = true;
-						std::cout << "error" << std::endl;
 					}
 				}
 				else
 				{
 					panelGoThrough = false;
-					std::cout << "go thru" << std::endl;
 					cv.notify_all();
 				}
 			}
