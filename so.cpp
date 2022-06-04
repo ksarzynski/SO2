@@ -12,6 +12,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <condition_variable>
 
 /*
 	1. Wektor zmieniony na liste
@@ -51,6 +52,7 @@ bool panelGoesRight = true;
 int ballCount = 0;
 std::mutex panelMutex;
 bool panelGoThrough = false;
+std::condition_variable cv;
 
 enum class panelWalls {
 	top,
@@ -103,6 +105,7 @@ void initWindow() {
 }
 
 void endThreads() {
+	cv.notify_all();
 	panelThread.join();
 	redisplayThread.join();
 	ballThrowerThread.join();
@@ -254,17 +257,21 @@ void moveBall(Ball& ball) {
 			if(ball.horizontalSpeed > 0)
 				ball.horizontalSpeed = -1 * ball.horizontalSpeed;
 		}
-		panelMutex.lock();
+		std::unique_lock panelLock(panelMutex);
 		if((newBallX + ball.radius > panelX1) and (newBallX - ball.radius < panelX2)
 			and (newBallY + ball.radius > panelY1) and (newBallY - ball.radius < panelY2))
 		{
 			if(not ball.isInPanel)
 			{
+				std::cout << "collision " << (panelGoThrough?"yes":"no") << std::endl;
 				if(not panelGoThrough)
 				{
+					panelGoThrough = true;
+					std::cout << "try to bounce" << std::endl;
 					auto wall = checkWhichWallBounce(ball, newBallX, newBallY);
 					if(wall)
 					{
+						std::cout << "bounce" << std::endl;
 						switch(*wall)
 						{
 							case panelWalls::top:
@@ -272,7 +279,6 @@ void moveBall(Ball& ball) {
 								auto distanceAlreadyMoved = ball.ballY + ball.radius - panelY1;
 								auto distanceToMove = ball.horizontalSpeed - distanceAlreadyMoved;
 								newBallY = panelY1 - ball.radius - distanceToMove;
-								ball.bounces--;
 								if(ball.horizontalSpeed > 0)
 									ball.horizontalSpeed = -1 * ball.horizontalSpeed;
 								break;
@@ -282,7 +288,6 @@ void moveBall(Ball& ball) {
 								auto distanceAlreadyMoved = ball.ballY - ball.radius - panelY2;
 								auto distanceToMove = -1 * ball.horizontalSpeed - distanceAlreadyMoved;
 								newBallY = distanceToMove + ball.radius + panelY2;
-								ball.bounces--;
 								if(ball.horizontalSpeed < 0)
 									ball.horizontalSpeed = -1 * ball.horizontalSpeed;
 								break;
@@ -292,7 +297,6 @@ void moveBall(Ball& ball) {
 								auto distanceAlreadyMoved = ball.ballX + ball.radius - panelX1;
 								auto distanceToMove = ball.verticalSpeed - distanceAlreadyMoved;
 								newBallX = panelX1 - ball.radius - distanceToMove;
-								ball.bounces--;
 								if(ball.verticalSpeed > 0)
 									ball.verticalSpeed = -1 * ball.verticalSpeed;
 								break;
@@ -302,17 +306,25 @@ void moveBall(Ball& ball) {
 								auto distanceAlreadyMoved = ball.ballX - ball.radius - panelX2;
 								auto distanceToMove = -1 * ball.verticalSpeed - distanceAlreadyMoved;
 								newBallX = distanceToMove + ball.radius + panelX2;
-								ball.bounces--;
 								if(ball.verticalSpeed < 0)
 									ball.verticalSpeed = -1 * ball.verticalSpeed;
 								break;
 							}
 						}
+						cv.wait(panelLock);
 					}
 					else
+					{
 						ball.isDead = true;
+						std::cout << "error" << std::endl;
+					}
 				}
-				panelGoThrough = not panelGoThrough;
+				else
+				{
+					panelGoThrough = false;
+					std::cout << "go thru" << std::endl;
+					cv.notify_all();
+				}
 			}
 			ball.isInPanel = true;
 		}
@@ -322,7 +334,7 @@ void moveBall(Ball& ball) {
 		}
 
 
-		panelMutex.unlock();
+		panelLock.unlock();
 		ball.ballX = newBallX;
 		ball.ballY = newBallY;
 		ball.mutex.unlock();
